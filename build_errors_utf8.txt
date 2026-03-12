@@ -1,0 +1,2 @@
+﻿src/pages/Dashboard.tsx(44,11): error TS6133: 'userData' is declared but its value is never read.
+src/pages/other/Transactions.tsx(1,1): error TS6133: 'useState' is declared but its value is never read.

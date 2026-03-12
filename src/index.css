@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #007AFF;
+  --color-secondary: #FF9500;
+  --color-background: #F2F2F7;
+  --color-text-primary: #1C1C1E;
+  --color-text-secondary: #636366;
+  --color-tint: #0A4D8C;
+  --color-accent: #5AC8FA;
+  --color-success: #34C759;
+  --color-warning: #FFCC00;
+  --color-error: #FF3B30;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+}
+
+:root {
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --glass-bg: rgba(255, 255, 255, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #121212;
+    --color-text-primary: #FFFFFF;
+    --color-text-secondary: #A0A0A0;
+    --card-bg: rgba(30, 30, 30, 0.8);
+    --glass-bg: rgba(0, 0, 0, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Custom Utilities that depend on variables */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.primary-gradient {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-tint));
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
