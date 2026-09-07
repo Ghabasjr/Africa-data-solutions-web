@@ -4,12 +4,18 @@ import { Card } from '../components/ui/Card';
 import { Shield, Zap, Globe, ArrowRight, ChevronRight, Activity, Phone, Database, Router, Mail, MapPin } from 'lucide-react';
 import About from '../components/ui/About';
 import Testimonials from '../components/ui/testimonial';
+import SEO from '../components/SEO';
 
 const Landing = () => {
     const navigate = useNavigate();
 
     return (
         <div className="min-h-screen bg-background text-text-primary overflow-x-hidden font-sans">
+            <SEO 
+                title="Seamless Digital Transactions"
+                description="The ultimate platform for Data, Airtime, and Bill payments in Nigeria. Fast, secure, and reliable."
+                keywords="africa data solutions, buy data nigeria, cheap airtime, electricity bills, cable tv nigeria, ads potiskum"
+            />
             {/* Navbar */}
             <nav className="fixed top-0 left-0 right-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/20">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">

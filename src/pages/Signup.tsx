@@ -3,12 +3,15 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Mail, Lock, User, Phone } from 'lucide-react';
+import SEO from '../components/SEO';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import Swal from 'sweetalert2';
+import { useDispatch } from 'react-redux';
+import { setUser, setRefreshToken } from '../store';
 
-import { registerUser } from '../../api/api';
+import { registerUser, saveToken } from '../../api/api';
 
 const SignupSchema = Yup.object().shape({
     firstName: Yup.string().required('First name is required'),
@@ -23,6 +26,7 @@ const SignupSchema = Yup.object().shape({
 
 const Signup = () => {
     const navigate = useNavigate();
+    const dispatch = useDispatch();
     const [isLoading, setIsLoading] = React.useState(false);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,13 +42,15 @@ const Signup = () => {
             });
 
             if (response.success) {
-                const { virtualAccount } = response.data;
+                const { user, accessToken, refreshToken, virtualAccount } = (response.data as any) || {};
+                const backendMsg = response.message || `Welcome, ${values.firstName}! Your account has been created.`;
 
+                // Show account details then auto-login
                 await Swal.fire({
                     title: 'Registration Successful!',
                     html: `
                         <div class="text-left space-y-2">
-                            <p>Welcome, <b>${values.firstName}</b>! Your account has been created.</p>
+                            <p>${backendMsg}</p>
                             ${virtualAccount ? `
                                 <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                                     <p class="font-bold text-primary mb-2">Virtual Account Assigned:</p>
@@ -56,12 +62,20 @@ const Signup = () => {
                         </div>
                     `,
                     icon: 'success',
-                    confirmButtonText: 'Login Now',
+                    confirmButtonText: 'Go to Dashboard',
                     confirmButtonColor: '#3B82F6',
                     allowOutsideClick: false
                 });
 
-                navigate('/login');
+                // Auto-login if tokens are provided
+                if (accessToken) {
+                    saveToken(accessToken);
+                    if (refreshToken) dispatch(setRefreshToken(refreshToken));
+                    if (user) dispatch(setUser(user));
+                    navigate('/dashboard');
+                } else {
+                    navigate('/login');
+                }
             } else {
                 Swal.fire({
                     title: 'Registration Failed',
@@ -73,7 +87,7 @@ const Signup = () => {
         } catch (err: any) {
             console.error('Signup error:', err);
             Swal.fire({
-                title: 'Error',
+                title: 'Registration Failed',
                 text: err.message || 'An unexpected error occurred',
                 icon: 'error',
                 confirmButtonColor: '#EF4444'
@@ -85,6 +99,7 @@ const Signup = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
+            <SEO title="Create Account" description="Join Africa Data Solutions for seamless bill payments and instant data top-ups." />
             {/* Abstract Background Shapes */}
             <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[100px]" />
             <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-secondary/10 rounded-full blur-[100px]" />
@@ -97,7 +112,6 @@ const Signup = () => {
                     <h1 className="text-3xl font-heading font-bold text-text-primary">Create Account</h1>
                     <p className="text-text-secondary mt-2">Join Africa Data Solutions today</p>
                 </div>
-
 
                 <Formik
                     initialValues={{ firstName: '', lastName: '', email: '', phone: '', password: '', confirmPassword: '' }}

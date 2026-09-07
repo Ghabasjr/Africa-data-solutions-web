@@ -1,5 +1,26 @@
 // ─── Base URL ────
-export const BASE_URL = "https://africa-data-solution-backend.onrender.com/api/v1";
+export const BASE_URL =
+    import.meta.env.VITE_API_BASE_URL ||
+    (typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+        ? "/api/v1"
+        : "https://api.africadatasolutions.org/api/v1");
+
+export class ApiError extends Error {
+    public status: number;
+    public code?: string;
+    public details?: any;
+    public rawData?: any;
+
+    constructor(message: string, status: number, code?: string, details?: any, rawData?: any) {
+        super(message);
+        this.name = "ApiError";
+        this.status = status;
+        this.code = code;
+        this.details = details;
+        this.rawData = rawData;
+    }
+}
 
 
 // ─── Auth ──
@@ -15,9 +36,11 @@ export interface RegisterRequest {
 export interface LoginRequest {
     email: string;
     password: string;
+    twoFactorCode?: string;
 }
 
 export interface Wallet {
+    id?: string;
     balance: number;
     currency: string;
 }
@@ -28,15 +51,29 @@ export interface User {
     phone: string;
     firstName: string;
     lastName: string;
+    role?: 'USER' | 'ADMIN' | string;
+    isActive?: boolean;
+    isVerified?: boolean;
+    twoFactorEnabled?: boolean;
     wallet?: Wallet;
+    virtualAccount?: VirtualAccount;
     createdAt?: string;
     updatedAt?: string;
 }
 
 export interface AuthResponse {
-    token: string;
+    /** Present after a successful login (access JWT) */
+    accessToken?: string;
+    /** Present after a successful login (refresh JWT) */
+    refreshToken?: string;
+    refreshExpiresAt?: string;
+    /** Legacy field – kept for backward compatibility */
+    token?: string;
     user: User;
     virtualAccount?: VirtualAccount;
+    /** True when the server requires a 2FA code before issuing tokens */
+    twoFactorRequired?: boolean;
+    twoFactorEnabled?: boolean;
 }
 
 // ─── Virtual Account ───
@@ -90,12 +127,17 @@ export interface GetDataOrdersParams {
 
 export interface Transaction {
     id: string;
+    walletId?: string;
     type: 'CREDIT' | 'DEBIT';
-    amount: number;
+    amount: number | string;
+    balanceBefore?: number | string;
+    balanceAfter?: number | string;
     reference: string;
     description: string;
-    status: 'PENDING' | 'COMPLETED' | 'FAILED';
+    status: 'PENDING' | 'COMPLETED' | 'FAILED' | string;
+    metadata?: Record<string, any>;
     createdAt: string;
+    updatedAt?: string;
 }
 
 export interface GetTransactionsParams {
@@ -172,20 +214,71 @@ async function apiFetch<T>(
         headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
-
-    const json = await response.json();
-
-    if (!response.ok) {
+    let response: Response;
+    try {
+        response = await fetch(`${BASE_URL}${endpoint}`, {
+            ...options,
+            headers,
+        });
+    } catch (networkErr: any) {
         throw new Error(
-            json?.message || `Request failed with status ${response.status}`
+            networkErr?.message === "Failed to fetch"
+                ? "Unable to connect to the backend server. Please verify your connection or dev server proxy."
+                : (networkErr?.message || "Network request failed")
         );
     }
 
-    return json as T;
+    // Parse response body safely
+    let data: any = null;
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+        try {
+            data = await response.json();
+        } catch {
+            data = null;
+        }
+    } else {
+        try {
+            const text = await response.text();
+            data = JSON.parse(text);
+        } catch {
+            data = null;
+        }
+    }
+
+    // If HTTP error or backend returned explicit failure
+    if (!response.ok || (data && typeof data === 'object' && data.success === false)) {
+        // Extract the exact error message provided by the backend
+        let errorMsg =
+            data?.message ||
+            data?.error?.message ||
+            data?.error?.description ||
+            (typeof data?.error === 'string' ? data.error : null);
+
+        // If backend returned field validation details
+        if (!errorMsg && data?.error?.details && typeof data.error.details === 'object') {
+            const detailEntries = Object.entries(data.error.details);
+            if (detailEntries.length > 0) {
+                errorMsg = detailEntries
+                    .map(([field, msg]) => `${field}: ${msg}`)
+                    .join(', ');
+            }
+        }
+
+        if (!errorMsg) {
+            errorMsg = `Request failed with status ${response.status}`;
+        }
+
+        throw new ApiError(
+            errorMsg,
+            response.status,
+            data?.error?.code,
+            data?.error?.details,
+            data
+        );
+    }
+
+    return data as T;
 }
 
 // ──
@@ -206,6 +299,12 @@ export const loginUser = (
     data: LoginRequest
 ): Promise<ApiResponse<AuthResponse>> =>
     apiFetch<ApiResponse<AuthResponse>>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+
+export const logoutUser = (data: { refreshToken: string }): Promise<ApiResponse<{}>> =>
+    apiFetch<ApiResponse<{}>>("/auth/logout", {
         method: "POST",
         body: JSON.stringify(data),
     });
@@ -262,17 +361,100 @@ export const changePin = (data: { currentPin: string, newPin: string }): Promise
 
 // ─── Virtual Accounts & Transactions ──
 
+export interface CreateVirtualAccountRequest {
+    bank: string; // e.g. "PALMPAY"
+}
+
+export interface CreatedVirtualAccount {
+    accountNumber: string;
+    accountName: string;
+    bankName: string;
+    reference: string;
+}
+
+export const createVirtualAccount = (
+    data: CreateVirtualAccountRequest
+): Promise<ApiResponse<CreatedVirtualAccount>> =>
+    apiFetch<ApiResponse<CreatedVirtualAccount>>("/wallet/virtual-account/create", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+
 export const getVirtualAccounts = (): Promise<ApiResponse<VirtualAccount[]>> =>
     apiFetch<ApiResponse<VirtualAccount[]>>("/wallet/virtual-accounts");
 
-export const getTransactions = (params: GetTransactionsParams = {}): Promise<ApiResponse<Transaction[]>> => {
+// ─── Wallet Funding ───
+
+export interface InitiateFundingRequest {
+    amount: number;
+}
+
+export interface FundingInitiationData {
+    reference: string;
+    authorizationUrl: string;
+    accessCode: string;
+    amount: number;
+}
+
+export const initiateFunding = (
+    data: InitiateFundingRequest
+): Promise<ApiResponse<FundingInitiationData>> =>
+    apiFetch<ApiResponse<FundingInitiationData>>("/wallet/fund/initiate", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+
+export interface FundingVerificationData {
+    status: string;
+    transaction: Transaction;
+}
+
+export const verifyFunding = (
+    reference: string
+): Promise<ApiResponse<FundingVerificationData>> =>
+    apiFetch<ApiResponse<FundingVerificationData>>(`/wallet/fund/verify/${reference}`);
+
+export interface PaginationData {
+    total?: number;
+    limit?: number;
+    offset?: number;
+    hasMore?: boolean;
+    page?: number;
+    pages?: number;
+}
+
+export interface WalletDetails {
+    id: string;
+    balance: number;
+    currency: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface WalletBalance {
+    balance: number;
+    currency: string;
+}
+
+export interface WalletTransactionsResponse {
+    items: Transaction[];
+    pagination?: PaginationData;
+}
+
+export const getWallet = (): Promise<ApiResponse<WalletDetails>> =>
+    apiFetch<ApiResponse<WalletDetails>>("/wallet");
+
+export const getWalletBalance = (): Promise<ApiResponse<WalletBalance>> =>
+    apiFetch<ApiResponse<WalletBalance>>("/wallet/balance");
+
+export const getTransactions = (params: GetTransactionsParams = {}): Promise<ApiResponse<WalletTransactionsResponse>> => {
     const parts: string[] = [];
     if (params.type) parts.push(`type=${params.type}`);
     if (params.status) parts.push(`status=${params.status}`);
     if (params.limit !== undefined) parts.push(`limit=${params.limit}`);
     if (params.offset !== undefined) parts.push(`offset=${params.offset}`);
     const qs = parts.length > 0 ? `?${parts.join('&')}` : '';
-    return apiFetch<ApiResponse<Transaction[]>>(`/wallet/transactions${qs}`);
+    return apiFetch<ApiResponse<WalletTransactionsResponse>>(`/wallet/transactions${qs}`);
 };
 
 export const getTransactionByReference = (reference: string): Promise<ApiResponse<Transaction>> =>
@@ -281,8 +463,8 @@ export const getTransactionByReference = (reference: string): Promise<ApiRespons
 // ─── Data Plans ───
 
 export interface PurchaseDataRequest {
-    planId: string;
-    phoneNumber: string;
+    dataPlanId: string;
+    phone: string;
 }
 
 export const getLiveDataPlans = (): Promise<ApiResponse<NetworkPlans[]>> =>
@@ -323,38 +505,51 @@ export const purchaseData = (data: PurchaseDataRequest): Promise<ApiResponse<any
 // ─── Airtime ───
 
 export interface PurchaseAirtimeRequest {
-    networkId: number;
+    network: string;
+    phone: string;
     amount: number;
-    phoneNumber: string;
+    pin?: string;
+    mobile?: string;
 }
 
-export interface AirtimeNetworksResponse {
-    status: boolean;
-    networks: Record<string, string>;
+export interface PurchaseAirtimeResponseData {
+    reference: string;
+    vtpassRequestId?: string;
+    phone: string;
+    amount: number;
+    network: string;
+    status: string;
 }
+
+export interface AirtimeNetwork {
+    id: string;
+    name: string;
+}
+
+export type AirtimeNetworksResponse = AirtimeNetwork[];
 
 export interface AirtimeOrder {
     id?: string;
-    status?: string;
-    amount?: number;
     network?: string;
     phone?: string;
+    amount?: number;
     reference?: string;
+    vtpassRequestId?: string;
+    status?: string;
+    vtpassResponse?: Record<string, any>;
+    failureReason?: string;
+    deliveredAt?: string;
     createdAt?: string;
 }
 
 export interface AirtimeHistoryResponse {
-    orders: AirtimeOrder[];
-    pagination: {
-        page: number;
-        limit: number;
-        total: number;
-        pages: number;
-    };
+    items: AirtimeOrder[];
+    orders?: AirtimeOrder[];
+    pagination?: PaginationData;
 }
 
-export const getAirtimeNetworks = (): Promise<ApiResponse<AirtimeNetworksResponse>> =>
-    apiFetch<ApiResponse<AirtimeNetworksResponse>>("/airtime/networks");
+export const getAirtimeNetworks = (): Promise<ApiResponse<AirtimeNetwork[]>> =>
+    apiFetch<ApiResponse<AirtimeNetwork[]>>("/airtime/networks");
 
 export const getAirtimeHistory = (params: { page?: number; limit?: number } = {}): Promise<ApiResponse<AirtimeHistoryResponse>> => {
     const parts: string[] = [];
@@ -367,11 +562,18 @@ export const getAirtimeHistory = (params: { page?: number; limit?: number } = {}
 export const getAirtimeOrderByReference = (reference: string): Promise<ApiResponse<AirtimeOrder>> =>
     apiFetch<ApiResponse<AirtimeOrder>>(`/airtime/${reference}`);
 
-export const purchaseAirtime = (data: PurchaseAirtimeRequest): Promise<ApiResponse<any>> =>
-    apiFetch<ApiResponse<any>>("/airtime/purchase", {
+export const purchaseAirtime = (data: PurchaseAirtimeRequest): Promise<ApiResponse<PurchaseAirtimeResponseData>> => {
+    const payload = {
+        network: data.network,
+        phone: data.phone || data.mobile,
+        amount: data.amount,
+        ...(data.pin ? { pin: data.pin } : {}),
+    };
+    return apiFetch<ApiResponse<PurchaseAirtimeResponseData>>("/airtime/purchase", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
     });
+};
 
 // ─── Bills ───
 
@@ -406,6 +608,13 @@ export interface ServiceVariation {
     name: string;
     variation_amount: string;
     fixedPrice: string;
+}
+
+export interface ServiceVariationsResponse {
+    serviceName?: string;
+    serviceID?: string;
+    convenienceFee?: string;
+    variations: ServiceVariation[];
 }
 
 export interface VerifyMeterRequest {
@@ -508,8 +717,8 @@ export const getBillByReference = (reference: string): Promise<ApiResponse<BillT
 export const getElectricityProviders = (): Promise<ApiResponse<ElectricityProvider[]>> =>
     apiFetch<ApiResponse<ElectricityProvider[]>>("/bills/electricity/providers");
 
-export const getServiceVariations = (serviceID: string): Promise<ApiResponse<ServiceVariation[]>> =>
-    apiFetch<ApiResponse<ServiceVariation[]>>(`/bills/variations/${serviceID}`);
+export const getServiceVariations = (serviceID: string): Promise<ApiResponse<ServiceVariationsResponse>> =>
+    apiFetch<ApiResponse<ServiceVariationsResponse>>(`/bills/variations/${serviceID}`);
 
 export const verifyMeterNumber = (data: VerifyMeterRequest): Promise<ApiResponse<VerifyMeterResponse>> =>
     apiFetch<ApiResponse<VerifyMeterResponse>>("/bills/electricity/verify", {
@@ -551,6 +760,39 @@ export const verifyJambProfile = (data: VerifyJambRequest): Promise<ApiResponse<
 
 export const payEducationBill = (data: PayEducationRequest): Promise<ApiResponse<any>> =>
     apiFetch<ApiResponse<any>>("/bills/education/pay", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+
+// ─── Notifications ───
+
+export interface RegisterFcmTokenRequest {
+    /** Minimum 32-character FCM device token */
+    fcmToken: string;
+}
+
+export interface TestNotificationRequest {
+    title: string;
+    body: string;
+}
+
+export const registerFcmToken = (
+    data: RegisterFcmTokenRequest
+): Promise<ApiResponse<{ registered: boolean }>> =>
+    apiFetch<ApiResponse<{ registered: boolean }>>("/notifications/register-token", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+
+export const removeFcmToken = (): Promise<ApiResponse<{ removed: boolean }>> =>
+    apiFetch<ApiResponse<{ removed: boolean }>>("/notifications/token", {
+        method: "DELETE",
+    });
+
+export const testNotification = (
+    data: TestNotificationRequest
+): Promise<ApiResponse<{ sent: boolean }>> =>
+    apiFetch<ApiResponse<{ sent: boolean }>>("/notifications/test", {
         method: "POST",
         body: JSON.stringify(data),
     });

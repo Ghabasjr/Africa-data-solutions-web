@@ -7,9 +7,11 @@ import { getLiveDataPlans, purchaseData, type DataPlan } from '../../../api/api'
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import PinModal from '../../components/PinModal';
 
 const BuyDataSchema = Yup.object().shape({
     networkId: Yup.number().required('Network is required'),
+    dataType: Yup.string().required('Data type is required'),
     planId: Yup.string().required('Data plan is required'),
     phoneNumber: Yup.string()
         .required('Phone number is required')
@@ -19,6 +21,8 @@ const BuyDataSchema = Yup.object().shape({
 const BuyData = () => {
     const [success, setSuccess] = React.useState<string | null>(null);
     const [error, setError] = React.useState<string | null>(null);
+    const [isPinModalOpen, setIsPinModalOpen] = React.useState(false);
+    const [pendingValues, setPendingValues] = React.useState<any>(null);
 
     // Fetch live data plans
     const { data: networks, isLoading } = useQuery({
@@ -32,6 +36,7 @@ const BuyData = () => {
     const purchaseMutation = useMutation({
         mutationFn: purchaseData,
         onSuccess: (response) => {
+            setIsPinModalOpen(false);
             if (response.success) {
                 setSuccess('Data purchase successful!');
                 setError(null);
@@ -40,6 +45,7 @@ const BuyData = () => {
             }
         },
         onError: (err: any) => {
+            setIsPinModalOpen(false);
             setError(err.message || 'An unexpected error occurred');
         }
     });
@@ -47,16 +53,24 @@ const BuyData = () => {
     const handlePurchase = (values: any) => {
         setSuccess(null);
         setError(null);
+        setPendingValues(values);
+        setIsPinModalOpen(true);
+    };
+
+    const handlePinSuccess = (_pin: string) => {
+        if (!pendingValues) return;
+
         purchaseMutation.mutate({
-            planId: values.planId,
-            phoneNumber: values.phoneNumber,
-        });
+            dataPlanId: pendingValues.planId.toString(),
+            phone: pendingValues.phoneNumber,
+            pin: _pin,
+        } as any);
     };
 
     if (isLoading) {
         return (
             <div className="max-w-xl mx-auto px-4 py-8 flex items-center justify-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <img src="/assets/datalog.png" alt="Loading..." className="h-16 w-16 animate-pulse object-contain" />
             </div>
         );
     }
@@ -91,13 +105,43 @@ const BuyData = () => {
                 )}
 
                 <Formik
-                    initialValues={{ networkId: '', planId: '', phoneNumber: '' }}
+                    initialValues={{ networkId: '', dataType: '', planId: '', phoneNumber: '' }}
                     validationSchema={BuyDataSchema}
                     onSubmit={handlePurchase}
                 >
                     {({ handleChange, handleBlur, handleSubmit, setFieldValue, values, errors, touched }) => {
                         const selectedNetwork = networks?.find(n => n.networkId === Number(values.networkId));
-                        const selectedPlan = selectedNetwork?.plans.find(p => p.id === values.planId);
+                        
+                        const dataTypes = [
+                            { id: 'sme', name: 'SME' },
+                            { id: 'gifting', name: 'Gifting' },
+                            { id: 'corporate gifting', name: 'Corporate gifting' },
+                            { id: 'data coupons', name: 'Data coupons' }
+                        ];
+
+                        const filteredPlans = selectedNetwork?.plans.filter(p => {
+                            const name = p.name.toLowerCase();
+                            
+                            // Define categories
+                            const isGifting = name.includes('gifting');
+                            const isCorporate = name.includes('corporate') || name.includes('cg');
+                            const isCoupon = name.includes('coupon');
+                            
+                            if (!values.dataType) return true;
+                            const type = values.dataType.toLowerCase();
+                            
+                            if (type === 'sme') {
+                                // SME includes "sme", "share", and anything NOT in other categories
+                                return name.includes('sme') || name.includes('share') || (!isGifting && !isCorporate && !isCoupon);
+                            }
+                            if (type === 'corporate gifting') return isCorporate;
+                            if (type === 'gifting') return isGifting && !isCorporate;
+                            if (type === 'data coupons') return isCoupon;
+                            
+                            return name.includes(type);
+                        }) || [];
+
+                        const selectedPlan = selectedNetwork?.plans.find(p => p.id?.toString() === values.planId?.toString());
 
                         return (
                             <form onSubmit={handleSubmit} className="space-y-6">
@@ -110,6 +154,7 @@ const BuyData = () => {
                                                 type="button"
                                                 onClick={() => {
                                                     setFieldValue('networkId', network.networkId);
+                                                    setFieldValue('dataType', ''); // Reset data type when network changes
                                                     setFieldValue('planId', ''); // Reset plan when network changes
                                                 }}
                                                 className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${Number(values.networkId) === network.networkId
@@ -128,6 +173,30 @@ const BuyData = () => {
 
                                 {values.networkId && (
                                     <div className="animate-fade-in">
+                                        <label className="block text-sm font-semibold text-text-primary mb-2">Data Type</label>
+                                        <select
+                                            name="dataType"
+                                            onChange={(e) => {
+                                                handleChange(e);
+                                                setFieldValue('planId', ''); // Reset plan when type changes
+                                            }}
+                                            onBlur={handleBlur}
+                                            value={values.dataType}
+                                            className="w-full p-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-sm"
+                                        >
+                                            <option value="">Select data type</option>
+                                            {dataTypes.map(type => (
+                                                <option key={type.id} value={type.id}>{type.name}</option>
+                                            ))}
+                                        </select>
+                                        {touched.dataType && errors.dataType && (
+                                            <p className="mt-1 text-xs text-red-500">{errors.dataType}</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {values.networkId && values.dataType && (
+                                    <div className="animate-fade-in">
                                         <label className="block text-sm font-semibold text-text-primary mb-2">Data Plan</label>
                                         <select
                                             name="planId"
@@ -137,7 +206,7 @@ const BuyData = () => {
                                             className="w-full p-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-sm"
                                         >
                                             <option value="">Select a plan</option>
-                                            {selectedNetwork?.plans.map((plan: DataPlan) => (
+                                            {filteredPlans.map((plan: DataPlan) => (
                                                 <option key={plan.id} value={plan.id}>
                                                     {plan.name} - ₦{Number(plan.price).toLocaleString()}
                                                 </option>
@@ -187,6 +256,12 @@ const BuyData = () => {
                     }}
                 </Formik>
             </Card>
+            <PinModal 
+                isOpen={isPinModalOpen}
+                onClose={() => setIsPinModalOpen(false)}
+                onSuccess={handlePinSuccess}
+                isLoading={purchaseMutation.isPending}
+            />
         </div>
     );
 };

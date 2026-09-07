@@ -5,4 +5,22 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      '/api/v1': {
+        target: 'https://api.africadatasolutions.org',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
+  preview: {
+    proxy: {
+      '/api/v1': {
+        target: 'https://api.africadatasolutions.org',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 })

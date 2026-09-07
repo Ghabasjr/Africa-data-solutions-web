@@ -24,6 +24,7 @@ import Pricing from './pages/other/Pricing'
 import Settings from './pages/other/Settings'
 
 import DashboardLayout from './components/DashboardLayout'
+import AuthGuard from './components/AuthGuard'
 
 function App() {
   return (
@@ -36,7 +37,8 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Dashboard Routes with Layout */}
-        <Route element={<DashboardLayout />}>
+        <Route element={<AuthGuard />}>
+          <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
 
           {/* Account Pages */}
@@ -58,6 +60,7 @@ function App() {
           <Route path="/others/:type" element={<Others />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/pricing" element={<Pricing />} />
+          </Route>
         </Route>
         {/* Add more routes as we build them */}
         <Route path="*" element={<Navigate to="/" replace />} />

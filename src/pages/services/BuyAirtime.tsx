@@ -3,38 +3,48 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { Phone, Smartphone, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getLiveDataPlans, purchaseAirtime } from '../../../api/api';
+import { getAirtimeNetworks, purchaseAirtime } from '../../../api/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import PinModal from '../../components/PinModal';
 
 const BuyAirtimeSchema = Yup.object().shape({
-    networkId: Yup.number().required('Network is required'),
+    network: Yup.string().required('Network is required'),
     phoneNumber: Yup.string()
         .required('Phone number is required')
         .matches(/^[0-9]{11}$/, 'Invalid phone number (11 digits required)'),
     amount: Yup.number()
         .required('Amount is required')
-        .min(100, 'Minimum amount is ₦100')
+        .min(50, 'Minimum amount is ₦50')
         .max(50000, 'Maximum amount is ₦50,000'),
 });
 
 const BuyAirtime = () => {
     const [success, setSuccess] = React.useState<string | null>(null);
     const [error, setError] = React.useState<string | null>(null);
+    const [isPinModalOpen, setIsPinModalOpen] = React.useState(false);
+    const [pendingValues, setPendingValues] = React.useState<any>(null);
 
-    // Fetch networks (reusing getLiveDataPlans)
+    // Fetch networks (reusing getAirtimeNetworks)
     const { data: networks, isLoading } = useQuery({
-        queryKey: ['liveDataPlans'],
+        queryKey: ['airtimeNetworks'],
         queryFn: async () => {
-            const response = await getLiveDataPlans();
+            const response = await getAirtimeNetworks();
             return response.data;
         },
     });
 
+    const networkList: any[] = Array.isArray(networks)
+        ? networks
+        : Array.isArray((networks as any)?.networks)
+        ? (networks as any).networks
+        : [];
+
     const purchaseMutation = useMutation({
         mutationFn: purchaseAirtime,
         onSuccess: (response) => {
+            setIsPinModalOpen(false);
             if (response.success) {
                 setSuccess('Airtime purchase successful!');
                 setError(null);
@@ -43,6 +53,7 @@ const BuyAirtime = () => {
             }
         },
         onError: (err: any) => {
+            setIsPinModalOpen(false);
             setError(err.message || 'An unexpected error occurred');
         }
     });
@@ -50,17 +61,26 @@ const BuyAirtime = () => {
     const handlePurchase = (values: any) => {
         setSuccess(null);
         setError(null);
+        setPendingValues(values);
+        setIsPinModalOpen(true);
+    };
+
+    const handlePinSuccess = (_pin: string) => {
+        // Leave the modal open so it displays the loading spinner!
+        if (!pendingValues) return;
+
         purchaseMutation.mutate({
-            networkId: Number(values.networkId),
-            amount: values.amount,
-            phoneNumber: values.phoneNumber,
+            network: pendingValues.network.toLowerCase(),
+            amount: Number(pendingValues.amount),
+            phone: pendingValues.phoneNumber,
+            pin: _pin,
         });
     };
 
     if (isLoading) {
         return (
             <div className="max-w-xl mx-auto px-4 py-8 flex items-center justify-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <img src="/assets/datalog.png" alt="Loading..." className="h-16 w-16 animate-pulse object-contain" />
             </div>
         );
     }
@@ -95,7 +115,7 @@ const BuyAirtime = () => {
                 )}
 
                 <Formik
-                    initialValues={{ networkId: '', phoneNumber: '', amount: '' }}
+                    initialValues={{ network: '', phoneNumber: '', amount: '' }}
                     validationSchema={BuyAirtimeSchema}
                     onSubmit={handlePurchase}
                 >
@@ -104,22 +124,22 @@ const BuyAirtime = () => {
                             <div>
                                 <label className="block text-sm font-semibold text-text-primary mb-2">Select Network</label>
                                 <div className="grid grid-cols-4 gap-3">
-                                    {networks?.map((network) => (
+                                    {networkList.map((network: any) => (
                                         <button
-                                            key={network.networkId}
+                                            key={network.id}
                                             type="button"
-                                            onClick={() => setFieldValue('networkId', network.networkId)}
-                                            className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${Number(values.networkId) === network.networkId
+                                            onClick={() => setFieldValue('network', network.id)}
+                                            className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${values.network === network.id
                                                     ? 'border-primary bg-primary/5 shadow-sm'
                                                     : 'border-gray-100 hover:border-gray-200'
                                                 }`}
                                         >
-                                            <span className="text-xs font-bold">{network.network}</span>
+                                            <span className="text-xs font-bold">{network.name}</span>
                                         </button>
                                     ))}
                                 </div>
-                                {touched.networkId && errors.networkId && (
-                                    <p className="mt-1 text-xs text-red-500">{errors.networkId}</p>
+                                {touched.network && errors.network && (
+                                    <p className="mt-1 text-xs text-red-500">{errors.network}</p>
                                 )}
                             </div>
 
@@ -167,6 +187,12 @@ const BuyAirtime = () => {
                     )}
                 </Formik>
             </Card>
+            <PinModal 
+                isOpen={isPinModalOpen}
+                onClose={() => setIsPinModalOpen(false)}
+                onSuccess={handlePinSuccess}
+                isLoading={purchaseMutation.isPending}
+            />
         </div>
     );
 };

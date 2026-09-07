@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import type { RootState } from '../store';
 import { useQuery } from '@tanstack/react-query';
-import { getMe, getVirtualAccounts, type User } from '../../api/api';
+import { getMe, getVirtualAccounts, getTransactions, getWalletBalance, type User, type Transaction } from '../../api/api';
 import { setUser } from '../store';
 import {
     Eye,
@@ -22,6 +22,11 @@ import {
     Copy,
     History,
     ChevronRight,
+    ArrowDownLeft,
+    ArrowUpRight,
+    CheckCircle,
+    Clock,
+    XCircle,
 } from 'lucide-react';
 
 const SERVICES = [
@@ -36,13 +41,21 @@ const SERVICES = [
     { icon: Gift, label: 'Smile', type: 'smile', color: 'bg-pink-100 text-pink-600' },
 ];
 
+const StatusIcon = ({ status }: { status: string }) => {
+    const s = status?.toUpperCase();
+    if (s === 'COMPLETED' || s === 'SUCCESS' || s === 'SUCCESSFUL') return <CheckCircle size={14} className="text-green-500" />;
+    if (s === 'FAILED') return <XCircle size={14} className="text-red-500" />;
+    return <Clock size={14} className="text-yellow-500" />;
+};
+
 const Dashboard = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const user = useSelector((state: RootState) => state.user.user) as User | null;
     const [showBalance, setShowBalance] = React.useState(false);
+    const [copiedAccount, setCopiedAccount] = React.useState(false);
 
-    // Fetch user profile
+    // Fetch user profile on mount and keep Redux state fresh
     useQuery({
         queryKey: ['me'],
         queryFn: async () => {
@@ -63,9 +76,35 @@ const Dashboard = () => {
         },
     });
 
+    // Fetch live wallet balance
+    const { data: balanceResponse } = useQuery({
+        queryKey: ['walletBalance'],
+        queryFn: () => getWalletBalance(),
+    });
+
+    // Fetch recent transactions (last 5)
+    const { data: txResponse, isLoading: isTxLoading } = useQuery({
+        queryKey: ['recentTransactions'],
+        queryFn: () => getTransactions({ limit: 5 }),
+    });
+
     const activeAccount = virtualAccounts?.[0];
-    const balance = user?.wallet?.balance ?? 0;
-    const currency = user?.wallet?.currency ?? '₦';
+    const balance = balanceResponse?.data?.balance ?? user?.wallet?.balance ?? 0;
+    const currency = balanceResponse?.data?.currency ?? user?.wallet?.currency ?? '₦';
+    const rawTxs = txResponse?.data;
+    const recentTxs: Transaction[] = Array.isArray(rawTxs)
+        ? rawTxs
+        : Array.isArray((rawTxs as any)?.items)
+        ? (rawTxs as any).items
+        : [];
+
+    const handleCopy = () => {
+        if (activeAccount) {
+            navigator.clipboard.writeText(activeAccount.accountNumber);
+            setCopiedAccount(true);
+            setTimeout(() => setCopiedAccount(false), 2000);
+        }
+    };
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -109,22 +148,29 @@ const Dashboard = () => {
                 <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm flex flex-col justify-between animate-fade-in" style={{ animationDelay: '0.1s' }}>
                     <div>
                         <h4 className="font-semibold text-gray-900 mb-2">Virtual Account</h4>
-                        <p className="text-xs text-gray-500 mb-6">Create or update your virtual account as required by CBN</p>
+                        <p className="text-xs text-gray-500 mb-6">Transfer money directly to fund your wallet instantly</p>
                         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-                            <p className="text-xs text-blue-600 font-medium mb-1">{activeAccount?.bankName || 'Virtual Bank'}</p>
-                            <p className="text-sm font-bold text-gray-900 mb-2">{activeAccount?.accountName || 'Africa Data Solutions'}</p>
+                            <p className="text-xs text-blue-600 font-medium mb-1">{activeAccount?.bankName || '—'}</p>
+                            <p className="text-sm font-bold text-gray-900 mb-2">{activeAccount?.accountName || '—'}</p>
                             <div className="flex items-center justify-between">
-                                <span className="text-lg font-mono font-bold tracking-wider">{activeAccount?.accountNumber || '0000000000'}</span>
+                                <span className="text-lg font-mono font-bold tracking-wider">
+                                    {activeAccount?.accountNumber || '—'}
+                                </span>
                                 <button
-                                    onClick={() => activeAccount && navigator.clipboard.writeText(activeAccount.accountNumber)}
-                                    className="text-blue-600 hover:bg-blue-100 p-2 rounded-lg transition-colors"
+                                    onClick={handleCopy}
+                                    className={`p-2 rounded-lg transition-colors ${copiedAccount ? 'text-green-600 bg-green-50' : 'text-blue-600 hover:bg-blue-100'}`}
+                                    title="Copy account number"
                                 >
                                     <Copy size={18} />
                                 </button>
                             </div>
+                            {copiedAccount && <p className="text-xs text-green-600 mt-1">Copied!</p>}
                         </div>
                     </div>
-                    <button className="mt-4 text-sm text-blue-600 font-semibold flex items-center justify-center gap-1 hover:underline">
+                    <button
+                        onClick={() => navigate('/fund-wallet')}
+                        className="mt-4 text-sm text-blue-600 font-semibold flex items-center justify-center gap-1 hover:underline"
+                    >
                         Manage Accounts <ChevronRight size={16} />
                     </button>
                 </div>
@@ -158,7 +204,7 @@ const Dashboard = () => {
 
             {/* Recent Transactions */}
             <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-sm mb-8 animate-fade-in" style={{ animationDelay: '0.6s' }}>
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-6">
                     <h3 className="text-lg font-bold text-gray-900">Recent Transactions</h3>
                     <button
                         onClick={() => navigate('/transactions')}
@@ -167,13 +213,43 @@ const Dashboard = () => {
                         View All
                     </button>
                 </div>
-                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                        <History size={32} />
+
+                {isTxLoading ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+                        <p className="text-sm">Loading transactions...</p>
                     </div>
-                    <p>No recent transactions yet</p>
-                    <p className="text-sm">Your activities will appear here</p>
-                </div>
+                ) : recentTxs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                            <History size={32} />
+                        </div>
+                        <p>No recent transactions yet</p>
+                        <p className="text-sm">Your activities will appear here</p>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-gray-50">
+                        {recentTxs.map((tx) => (
+                            <div key={tx.id} className="flex items-center justify-between py-4">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === 'CREDIT' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                        {tx.type === 'CREDIT' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-gray-800 line-clamp-1">{tx.description || 'Transaction'}</p>
+                                        <p className="text-xs text-gray-400">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className={`text-sm font-bold ${tx.type === 'CREDIT' ? 'text-green-600' : 'text-gray-800'}`}>
+                                        {tx.type === 'CREDIT' ? '+' : '-'}{currency}{Number(tx.amount).toLocaleString()}
+                                    </span>
+                                    <StatusIcon status={tx.status} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );

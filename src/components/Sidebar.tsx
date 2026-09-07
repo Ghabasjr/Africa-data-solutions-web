@@ -12,11 +12,15 @@ import {
     Tag,
     Zap,
     MessageCircle,
-    X
+    X,
+    LogOut
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { removeToken, logoutUser } from '../../api/api';
 import SidebarItem from './SidebarItem';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../store';
+import { logout } from '../store';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -25,6 +29,29 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     const user = useSelector((state: RootState) => state.user.user);
+    const refreshToken = useSelector((state: RootState) => state.user.refreshToken);
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
+    const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+
+    const handleLogout = async () => {
+        setIsLoggingOut(true);
+        try {
+            // Call the API logout endpoint to invalidate the refresh token server-side
+            if (refreshToken) {
+                await logoutUser({ refreshToken }).catch(() => {
+                    // Silently ignore API errors — still log out locally
+                });
+            }
+        } finally {
+            removeToken();
+            dispatch(logout());
+            navigate('/login');
+            setIsLoggingOut(false);
+        }
+    };
+
+    const userInitial = user?.firstName?.[0]?.toUpperCase() || 'U';
 
     return (
         <>
@@ -57,24 +84,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                     </button>
 
                     <div className="w-20 h-20 rounded-full bg-orange-100 overflow-hidden mb-3 border-4 border-orange-50 flex items-center justify-center">
-                        {/* Placeholder for user image if available, else generic avatar */}
-                        {/* <img
-                            src="https://img.freepik.com/free-vector/businessman-character-avatar-isolated_24877-60111.jpg"
-                            alt="Profile"
-                            className="w-full h-full object-cover"
-                        /> */}
-                        <span className="text-3xl font-bold text-orange-600">{user?.name?.[0]?.toUpperCase() || 'U'}</span>
+                        <span className="text-3xl font-bold text-orange-600">{userInitial}</span>
                     </div>
-                    {/* <h2 className="text-xl font-bold primary-gradient text-transparent bg-clip-text">ADS Web</h2> */}
+                    {user && (
+                        <div className="text-center">
+                            <p className="text-sm font-semibold text-gray-800">{user.firstName} {user.lastName}</p>
+                            <p className="text-xs text-gray-500 truncate max-w-[160px]">{user.email}</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Navigation */}
                 <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-                    <SidebarItem icon={LayoutDashboard} label="Dashboard" path="/dashboard" active />
+                    <SidebarItem icon={LayoutDashboard} label="Dashboard" path="/dashboard" active onClick={onClose} />
 
                     <SidebarItem
                         icon={User}
                         label="Account"
+                        onClick={onClose}
                         subItems={[
                             { label: 'Profile', path: '/profile' },
                             { label: 'Upgrade Account', path: '/upgrade' },
@@ -84,13 +111,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         ]}
                     />
 
-                    <SidebarItem icon={Wallet} label="Fund Wallet" path="/fund-wallet" />
-                    <SidebarItem icon={Wifi} label="Buy Data" path="/buy-data" />
-                    <SidebarItem icon={Phone} label="Buy Airtime" path="/buy-airtime" />
+                    <SidebarItem icon={Wallet} label="Fund Wallet" path="/fund-wallet" onClick={onClose} />
+                    <SidebarItem icon={Wifi} label="Buy Data" path="/buy-data" onClick={onClose} />
+                    <SidebarItem icon={Phone} label="Buy Airtime" path="/buy-airtime" onClick={onClose} />
 
                     <SidebarItem
-                        icon={Zap} // Using Zap for "Bills" generic icon or lightbulb
+                        icon={Zap}
                         label="Bills"
+                        onClick={onClose}
                         subItems={[
                             { label: 'Cable TV', path: '/bills/cable' },
                             { label: 'Electricity', path: '/bills/electricity' },
@@ -98,12 +126,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         ]}
                     />
 
-                    <SidebarItem icon={History} label="Transactions" path="/transactions" />
-                    <SidebarItem icon={CreditCard} label="Wallet Summary" path="/wallet-summary" />
+                    <SidebarItem icon={History} label="Transactions" path="/transactions" onClick={onClose} />
+                    <SidebarItem icon={CreditCard} label="Wallet Summary" path="/wallet-summary" onClick={onClose} />
 
                     <SidebarItem
                         icon={MoreHorizontal}
                         label="Others"
+                        onClick={onClose}
                         subItems={[
                             { label: 'Edu Pins', path: '/others/edu-pins' },
                             { label: 'Bulk SMS', path: '/others/bulk-sms' },
@@ -112,12 +141,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         ]}
                     />
 
-                    <SidebarItem icon={Settings} label="Settings" path="/settings" />
-                    <SidebarItem icon={Tag} label="Pricing" path="/pricing" />
+                    <SidebarItem icon={Settings} label="Settings" path="/settings" onClick={onClose} />
+                    <SidebarItem icon={Tag} label="Pricing" path="/pricing" onClick={onClose} />
                 </nav>
 
-                {/* Floating Message Us Button or Footer Section */}
-                <div className="p-4 relative">
+                {/* Footer Section */}
+                <div className="p-4 relative mt-auto border-t border-gray-100">
+                    <button
+                        onClick={handleLogout}
+                        disabled={isLoggingOut}
+                        className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 transition-colors mb-4 disabled:opacity-50"
+                    >
+                        <LogOut size={20} />
+                        <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
+                    </button>
+
                     <div className="absolute bottom-4 left-4 right-4 bg-white rounded-xl shadow-lg border border-gray-100 p-2 flex items-center gap-3">
                         <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white shadow-green-200 shadow-md">
                             <MessageCircle size={24} />
@@ -131,7 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
                     {/* Small branding text */}
                     <div className="mt-2 text-center text-xs text-gray-300">
-                        GetButton
+                        Africa Data Solutions
                     </div>
                 </div>
 

@@ -1,11 +1,23 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
-import { User as UserIcon, Mail, Phone, MapPin, Camera, Edit2, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import {
+    User as UserIcon,
+    Mail,
+    Phone,
+    Camera,
+    Edit2,
+    CheckCircle2,
+    AlertCircle,
+    X,
+    ShieldCheck,
+    ShieldOff,
+    BadgeCheck,
+} from 'lucide-react';
 import type { RootState } from '../../store';
-import { updateProfile } from '../../../api/api';
+import { getMe, updateProfile } from '../../../api/api';
 import { setUser } from '../../store';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -25,6 +37,16 @@ const Profile = () => {
     const [isEditing, setIsEditing] = React.useState(false);
     const [success, setSuccess] = React.useState<string | null>(null);
     const [error, setError] = React.useState<string | null>(null);
+
+    // Re-fetch fresh profile from the server on page load
+    useQuery({
+        queryKey: ['me'],
+        queryFn: async () => {
+            const res = await getMe();
+            if (res.success) dispatch(setUser(res.data));
+            return res.data;
+        },
+    });
 
     const updateMutation = useMutation({
         mutationFn: updateProfile,
@@ -69,10 +91,23 @@ const Profile = () => {
                         </button>
                     </div>
                     <h2 className="text-xl font-bold text-text-primary tracking-tight mb-1">{fullName}</h2>
-                    <p className="text-sm text-text-secondary mb-6">{user?.email}</p>
-                    <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-green-50 text-green-600 text-xs font-bold border border-green-100">
-                        <CheckCircle2 size={14} className="mr-1.5" />
-                        Verified Account
+                    <p className="text-sm text-text-secondary mb-2">{user?.email}</p>
+                    {user?.role && (
+                        <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full mb-4">
+                            {user.role}
+                        </span>
+                    )}
+
+                    {/* Verification / 2FA badges */}
+                    <div className="flex flex-col gap-2 w-full mt-2">
+                        <div className={`inline-flex items-center px-4 py-2 rounded-full text-xs font-bold border ${user?.isVerified ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                            <BadgeCheck size={14} className="mr-1.5" />
+                            {user?.isVerified ? 'Account Verified' : 'Not Verified'}
+                        </div>
+                        <div className={`inline-flex items-center px-4 py-2 rounded-full text-xs font-bold border ${user?.twoFactorEnabled ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                            {user?.twoFactorEnabled ? <ShieldCheck size={14} className="mr-1.5" /> : <ShieldOff size={14} className="mr-1.5" />}
+                            2FA {user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                        </div>
                     </div>
                 </Card>
 
@@ -197,13 +232,25 @@ const Profile = () => {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-2 block">Location</label>
+                                    <label className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-2 block">Account Status</label>
                                     <div className="flex items-center gap-3 p-4 bg-gray-50/50 rounded-2xl border border-gray-100/50">
-                                        <MapPin size={18} className="text-primary" />
-                                        <span className="font-semibold text-text-primary">Lagos, Nigeria</span>
+                                        <CheckCircle2 size={18} className={user?.isActive ? 'text-green-500' : 'text-gray-400'} />
+                                        <span className="font-semibold text-text-primary">
+                                            {user?.isActive ? 'Active' : 'Inactive'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Wallet Info */}
+                            {user?.wallet && (
+                                <div className="p-6 bg-primary/5 rounded-2xl border border-primary/10">
+                                    <p className="font-bold text-text-primary mb-1">Wallet Balance</p>
+                                    <p className="text-2xl font-bold text-primary">
+                                        {user.wallet.currency || '₦'}{Number(user.wallet.balance).toLocaleString()}
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="p-6 bg-primary/5 rounded-2xl border border-primary/10 flex flex-col sm:flex-row items-center justify-between gap-4">
                                 <div>

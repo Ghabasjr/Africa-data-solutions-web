@@ -40,7 +40,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 {...props}
             >
                 {isLoading ? (
-                    <div className="mr-2 w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <img src="/assets/datalog.png" alt="Loading..." className="mr-2 w-5 h-5 animate-pulse object-contain" />
                 ) : leftIcon ? (
                     <span className="mr-2">{leftIcon}</span>
                 ) : null}

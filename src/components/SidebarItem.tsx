@@ -13,9 +13,10 @@ interface SidebarItemProps {
     active?: boolean;
     path?: string;
     subItems?: SubItem[];
+    onClick?: () => void;
 }
 
-const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active = false, path, subItems }) => {
+const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active = false, path, subItems, onClick }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const hasSubItems = subItems && subItems.length > 0;
 
@@ -54,6 +55,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active = f
                             <Link
                                 key={item.label}
                                 to={item.path}
+                                onClick={onClick}
                                 className="block py-2 text-sm text-gray-500 hover:text-blue-600 transition-colors"
                             >
                                 - {item.label}
@@ -66,7 +68,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active = f
     );
 
     if (path && !hasSubItems) {
-        return <Link to={path} className="block mb-1">{content}</Link>;
+        return <Link to={path} className="block mb-1" onClick={onClick}>{content}</Link>;
     }
 
     return <div className="mb-1">{content}</div>;
