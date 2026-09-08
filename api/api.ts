@@ -55,6 +55,10 @@ export interface User {
     isActive?: boolean;
     isVerified?: boolean;
     twoFactorEnabled?: boolean;
+    hasPin?: boolean;
+    pinCreated?: boolean;
+    isPinSet?: boolean;
+    hasTransactionPin?: boolean;
     wallet?: Wallet;
     virtualAccount?: VirtualAccount;
     createdAt?: string;

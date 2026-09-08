@@ -11,16 +11,19 @@ import { createPin, changePin } from '../../../api/api';
 
 const CreatePinSchema = Yup.object().shape({
     pin: Yup.string()
-        .matches(/^[0-9]{4}$/, 'PIN must be exactly 4 digits')
+        .matches(/^[0-9]{6}$/, 'PIN must be exactly 6 digits')
         .required('PIN is required'),
+    confirmPin: Yup.string()
+        .oneOf([Yup.ref('pin')], 'PINs must match')
+        .required('Please confirm your PIN'),
 });
 
 const ChangePinSchema = Yup.object().shape({
     currentPin: Yup.string()
-        .matches(/^[0-9]{4}$/, 'Current PIN must be exactly 4 digits')
+        .matches(/^[0-9]{6}$/, 'Current PIN must be exactly 6 digits')
         .required('Current PIN is required'),
     newPin: Yup.string()
-        .matches(/^[0-9]{4}$/, 'New PIN must be exactly 4 digits')
+        .matches(/^[0-9]{6}$/, 'New PIN must be exactly 6 digits')
         .required('New PIN is required'),
     confirmNewPin: Yup.string()
         .oneOf([Yup.ref('newPin')], 'New PINs must match')
@@ -86,14 +89,14 @@ const PinManagement = () => {
                     {mode === 'create' ? <KeyRound className="text-blue-600" size={24} /> : <Lock className="text-blue-600" size={24} />}
                     <p className="text-sm text-blue-800">
                         {mode === 'create'
-                            ? "Create a 4-digit transaction PIN. This PIN is required to authorize all transfers and bill payments. Keep it safe."
-                            : "Update your existing 4-digit transaction PIN. Keep it safe."}
+                            ? "Create a 6-digit transaction PIN. This PIN is required to authorize all transfers and bill payments. Keep it safe."
+                            : "Update your existing 6-digit transaction PIN. Keep it safe."}
                     </p>
                 </div>
 
                 {mode === 'create' ? (
                     <Formik
-                        initialValues={{ pin: '' }}
+                        initialValues={{ pin: '', confirmPin: '' }}
                         validationSchema={CreatePinSchema}
                         onSubmit={(values, { resetForm }) => {
                             createMutation.mutate({ pin: values.pin }, { onSuccess: () => resetForm() });
@@ -102,16 +105,28 @@ const PinManagement = () => {
                         {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <Input
-                                    label="Create 4-digit PIN"
+                                    label="Create 6-digit PIN"
                                     name="pin"
                                     type="password"
-                                    maxLength={4}
-                                    placeholder="••••"
+                                    maxLength={6}
+                                    placeholder="••••••"
                                     leftIcon={<KeyRound size={18} />}
                                     onChange={handleChange}
                                     onBlur={handleBlur}
                                     value={values.pin}
                                     error={touched.pin ? errors.pin : undefined}
+                                />
+                                <Input
+                                    label="Confirm 6-digit PIN"
+                                    name="confirmPin"
+                                    type="password"
+                                    maxLength={6}
+                                    placeholder="••••••"
+                                    leftIcon={<KeyRound size={18} />}
+                                    onChange={handleChange}
+                                    onBlur={handleBlur}
+                                    value={values.confirmPin}
+                                    error={touched.confirmPin ? errors.confirmPin : undefined}
                                 />
                                 <Button type="submit" className="w-full" isLoading={createMutation.isPending}>
                                     Create PIN
@@ -133,8 +148,8 @@ const PinManagement = () => {
                                     label="Current PIN"
                                     name="currentPin"
                                     type="password"
-                                    maxLength={4}
-                                    placeholder="••••"
+                                    maxLength={6}
+                                    placeholder="••••••"
                                     leftIcon={<Lock size={18} />}
                                     onChange={handleChange}
                                     onBlur={handleBlur}
@@ -145,8 +160,8 @@ const PinManagement = () => {
                                     label="New PIN"
                                     name="newPin"
                                     type="password"
-                                    maxLength={4}
-                                    placeholder="••••"
+                                    maxLength={6}
+                                    placeholder="••••••"
                                     leftIcon={<KeyRound size={18} />}
                                     onChange={handleChange}
                                     onBlur={handleBlur}
@@ -157,8 +172,8 @@ const PinManagement = () => {
                                     label="Confirm New PIN"
                                     name="confirmNewPin"
                                     type="password"
-                                    maxLength={4}
-                                    placeholder="••••"
+                                    maxLength={6}
+                                    placeholder="••••••"
                                     leftIcon={<KeyRound size={18} />}
                                     onChange={handleChange}
                                     onBlur={handleBlur}

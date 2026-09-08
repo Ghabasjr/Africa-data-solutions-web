@@ -8,10 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import Swal from 'sweetalert2';
-import { useDispatch } from 'react-redux';
-import { setUser, setRefreshToken } from '../store';
-
-import { registerUser, saveToken } from '../../api/api';
+import { registerUser } from '../../api/api';
 
 const SignupSchema = Yup.object().shape({
     firstName: Yup.string().required('First name is required'),
@@ -26,7 +23,6 @@ const SignupSchema = Yup.object().shape({
 
 const Signup = () => {
     const navigate = useNavigate();
-    const dispatch = useDispatch();
     const [isLoading, setIsLoading] = React.useState(false);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,15 +38,20 @@ const Signup = () => {
             });
 
             if (response.success) {
-                const { user, accessToken, refreshToken, virtualAccount } = (response.data as any) || {};
+                const { virtualAccount } = (response.data as any) || {};
                 const backendMsg = response.message || `Welcome, ${values.firstName}! Your account has been created.`;
 
-                // Show account details then auto-login
+                // Flag that new user needs PIN setup after login
+                sessionStorage.setItem('pendingPinSetup', 'true');
+                sessionStorage.setItem('registeredEmail', values.email);
+
+                // Show account details then redirect to login
                 await Swal.fire({
-                    title: 'Registration Successful!',
+                    title: 'Account Created!',
                     html: `
                         <div class="text-left space-y-2">
                             <p>${backendMsg}</p>
+                            <p class="text-sm text-gray-600 mt-2">Please sign in to your new account to set up your transaction PIN and access your dashboard.</p>
                             ${virtualAccount ? `
                                 <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                                     <p class="font-bold text-primary mb-2">Virtual Account Assigned:</p>
@@ -62,20 +63,18 @@ const Signup = () => {
                         </div>
                     `,
                     icon: 'success',
-                    confirmButtonText: 'Go to Dashboard',
+                    confirmButtonText: 'Proceed to Login',
                     confirmButtonColor: '#3B82F6',
                     allowOutsideClick: false
                 });
 
-                // Auto-login if tokens are provided
-                if (accessToken) {
-                    saveToken(accessToken);
-                    if (refreshToken) dispatch(setRefreshToken(refreshToken));
-                    if (user) dispatch(setUser(user));
-                    navigate('/dashboard');
-                } else {
-                    navigate('/login');
-                }
+                navigate('/login', {
+                    state: {
+                        email: values.email,
+                        registeredSuccess: true,
+                        needsPinSetup: true,
+                    }
+                });
             } else {
                 Swal.fire({
                     title: 'Registration Failed',

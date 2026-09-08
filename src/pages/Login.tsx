@@ -1,8 +1,8 @@
 import React from 'react';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
-import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, Mail, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { LogIn, Mail, Lock, Eye, EyeOff, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useDispatch } from 'react-redux';
 import { setUser, setRefreshToken } from '../store';
@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import Swal from 'sweetalert2';
+import CreatePinModal from '../components/CreatePinModal';
 
 import { loginUser, saveToken } from '../../api/api';
 
@@ -30,9 +31,16 @@ const TwoFactorSchema = Yup.object().shape({
 
 const Login = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const dispatch = useDispatch();
     const [showPassword, setShowPassword] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(false);
+    const [showPinModal, setShowPinModal] = React.useState(false);
+
+    // Registration feedback state
+    const locationState = location.state as { email?: string; registeredSuccess?: boolean; needsPinSetup?: boolean } | null;
+    const initialEmail = locationState?.email || sessionStorage.getItem('registeredEmail') || '';
+
     // When the server signals 2FA is required, we store the pending credentials here
     const [pendingCredentials, setPendingCredentials] = React.useState<{ email: string; password: string } | null>(null);
 
@@ -61,15 +69,26 @@ const Login = () => {
 
                 dispatch(setUser(data.user));
 
-                Swal.fire({
-                    title: 'Welcome Back!',
-                    text: response.message || 'Login successful',
-                    icon: 'success',
-                    timer: 1500,
-                    showConfirmButton: false,
-                });
+                // Check if user needs to create transaction PIN
+                const pendingPin =
+                    locationState?.needsPinSetup ||
+                    sessionStorage.getItem('pendingPinSetup') === 'true' ||
+                    data.user?.hasPin === false ||
+                    data.user?.pinCreated === false ||
+                    data.user?.isPinSet === false;
 
-                navigate('/dashboard');
+                if (pendingPin) {
+                    setShowPinModal(true);
+                } else {
+                    Swal.fire({
+                        title: 'Welcome Back!',
+                        text: response.message || 'Login successful',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                    });
+                    navigate('/dashboard');
+                }
             } else {
                 Swal.fire({
                     title: 'Login Failed',
@@ -168,8 +187,19 @@ const Login = () => {
                     <p className="text-text-secondary mt-2">Sign in to continue to Africa Data Solutions</p>
                 </div>
 
+                {locationState?.registeredSuccess && (
+                    <div className="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-3 text-emerald-600 dark:text-emerald-400 text-sm">
+                        <CheckCircle2 size={20} className="shrink-0 text-emerald-500 mt-0.5" />
+                        <div>
+                            <p className="font-semibold">Account created successfully!</p>
+                            <p className="text-xs text-text-secondary mt-0.5">Please sign in to set up your 6-digit transaction PIN and get started.</p>
+                        </div>
+                    </div>
+                )}
+
                 <Formik
-                    initialValues={{ email: '', password: '' }}
+                    initialValues={{ email: initialEmail, password: '' }}
+                    enableReinitialize
                     validationSchema={LoginSchema}
                     onSubmit={attemptLogin}
                 >
@@ -243,6 +273,18 @@ const Login = () => {
                     </p>
                 </div>
             </Card>
+
+            <CreatePinModal
+                isOpen={showPinModal}
+                onSuccess={() => {
+                    setShowPinModal(false);
+                    navigate('/dashboard');
+                }}
+                onClose={() => {
+                    setShowPinModal(false);
+                    navigate('/dashboard');
+                }}
+            />
         </div>
     );
 };
