@@ -271,7 +271,7 @@ const Landing = () => {
                     </li>
                     <li className='flex items-center gap-4'>
                         <Phone size={24} />
-                        <span>09060425772</span>
+                        <span>08160604894</span>
                     </li>
                     <li className='flex items-center gap-4'>
                         <MapPin size={24} />
@@ -327,7 +327,7 @@ const Landing = () => {
                                 <Phone size={22} className="text-white" />
                             </div>
                             <p className="text-xs tracking-widest uppercase text-blue-200 font-mono mb-2">Phone</p>
-                            <p className="text-sm font-semibold text-white">09060425772</p>
+                            <p className="text-sm font-semibold text-white">08160604894</p>
                             <div className="mt-6 h-0.5 w-10 bg-white/40 group-hover:w-full transition-all duration-500 rounded-full" />
                         </li>
 
