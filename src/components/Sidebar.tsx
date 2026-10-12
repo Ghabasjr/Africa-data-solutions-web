@@ -13,7 +13,8 @@ import {
     Zap,
     MessageCircle,
     X,
-    LogOut
+    LogOut,
+    FileText
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { removeToken, logoutUser } from '../../api/api';
@@ -143,6 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
                     <SidebarItem icon={Settings} label="Settings" path="/settings" onClick={onClose} />
                     <SidebarItem icon={Tag} label="Pricing" path="/pricing" onClick={onClose} />
+                    <SidebarItem icon={FileText} label="Privacy Policy" path="/privacy" onClick={onClose} />
                 </nav>
 
                 {/* Footer Section */}

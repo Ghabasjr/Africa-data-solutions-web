@@ -22,6 +22,7 @@ import WalletSummary from './pages/other/WalletSummary'
 import Others from './pages/other/Others'
 import Pricing from './pages/other/Pricing'
 import Settings from './pages/other/Settings'
+import Privacy from './pages/other/Privacy'
 
 import DashboardLayout from './components/DashboardLayout'
 import AuthGuard from './components/AuthGuard'
@@ -35,6 +36,7 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/privacy" element={<Privacy />} />
 
         {/* Dashboard Routes with Layout */}
         <Route element={<AuthGuard />}>

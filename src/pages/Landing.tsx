@@ -27,6 +27,13 @@ const Landing = () => {
                     </div>
                     <div className="flex items-center gap-4">
                         <button
+                            id="navbar-privacy-btn"
+                            onClick={() => navigate('/privacy')}
+                            className="text-sm font-semibold text-text-secondary hover:text-primary transition-colors hidden sm:block"
+                        >
+                            Privacy Policy
+                        </button>
+                        <button
                             onClick={() => navigate('/login')}
                             className="text-sm font-semibold text-text-secondary hover:text-primary transition-colors hidden sm:block"
                         >
@@ -363,7 +370,17 @@ const Landing = () => {
                         {/* </div> */}
                         <span className="font-heading font-bold text-lg">Africa Data Solutions</span>
                     </div>
-                    <p className="text-sm text-text-secondary">© 2026 Africa Data Solutions. All rights reserved.</p>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                        <p className="text-sm text-text-secondary">© 2026 Africa Data Solutions. All rights reserved.</p>
+                        <span className="hidden sm:block text-gray-200">|</span>
+                        <button
+                            id="footer-privacy-btn"
+                            onClick={() => navigate('/privacy')}
+                            className="text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                        >
+                            Privacy Policy
+                        </button>
+                    </div>
                 </div>
             </footer>
         </div>
